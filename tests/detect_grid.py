@@ -63,6 +63,7 @@ def main(
     rho_res = 1
     theta_res = 2 * np.pi/360
     threshold = 200
+    theta_threshold = 0.2
     #print (thresholded_sobelxy_mask)
     lines = cv2.HoughLines(thresholded_sobelxy_mask, rho_res, theta_res, threshold)
     #print(f"lines:\n{lines}")
@@ -74,10 +75,10 @@ def main(
         theta = line[0][1]
         line_is_vertical = False
         line_is_horizontal = False
-        if abs(theta) < 0.1 or abs(theta - np.pi) < 0.1 or abs(theta - 2 * np.pi) < 0.1:
+        if abs(theta) < theta_threshold or abs(theta - np.pi) < theta_threshold or abs(theta - 2 * np.pi) < theta_threshold:
             line_is_vertical = True
             vertical_lines.append(line)
-        if abs(theta - np.pi/2) < 0.1 or abs(theta - 3 * np.pi/2) < 0.1:
+        if abs(theta - np.pi/2) < theta_threshold or abs(theta - 3 * np.pi/2) < theta_threshold:
             line_is_horizontal = True
             horizontal_lines.append(line)
         color = (0, 0, 0)
@@ -109,9 +110,11 @@ def main(
     cv2.line(corners_img, (round(north_west_corner[0]), round(north_west_corner[1])),
              (round(south_west_corner[0]), round(south_west_corner[1])), (255, 0, 0))
     cv2.imwrite(os.path.join(outputDirectory, "main_corners.png"), corners_img)
-    
-    # Perspective correction
 
+    # Perspective correction
+    perspective_corrected_img = CorrectPerspective(original_img, north_west_corner, north_east_corner,
+                                                   south_east_corner, south_west_corner)
+    cv2.imwrite(os.path.join(outputDirectory, "main_perspectiveCorrected.png"), perspective_corrected_img)
 
 def DrawLine(image, rho_theta, color):
     rho = rho_theta[0]
@@ -137,12 +140,12 @@ def CrossKernel(width=3, length_ratio=15, output_directory=None):
         cv2.imwrite(os.path.join(output_directory, "CrossKernel_crossKernel.png"), cross_kernel)
     return cross_kernel
 
-def BoundaryHorizontalLines(horizontal_lines):
+def BoundaryHorizontalLines(horizontal_lines, theta_threshold=0.2):
     rho_thetas = []
     for line in horizontal_lines:
         rho = line[0][0]
         theta = line[0][1]
-        if abs(theta - 1.5 * math.pi) < 0.1:
+        if abs(theta - 1.5 * math.pi) < theta_threshold:
             theta -= math.pi
             rho = -rho
         rho_thetas.append((rho, theta))
@@ -160,12 +163,12 @@ def BoundaryHorizontalLines(horizontal_lines):
     south_rho = statistics.median(south_rhos)
     return (north_rho, north_theta), (south_rho, south_theta)
 
-def BoundaryVerticalLines(vertical_lines):
+def BoundaryVerticalLines(vertical_lines, theta_threshold=0.2):
     rho_thetas = []
     for line in vertical_lines:
         rho = line[0][0]
         theta = line[0][1]
-        if abs(theta - math.pi) < 0.1:
+        if abs(theta - math.pi) < theta_threshold:
             theta -= math.pi
             rho = -rho
         rho_thetas.append((rho, theta))
@@ -209,6 +212,16 @@ def Intersection(line1, line2):
     y = rho1sin1 - alpha_beta[0] * cos1
     #print(f"Intersection(): (x, y) = ({x}, {y})")
     return (x, y)
+
+def CorrectPerspective(original_img, north_west_corner, north_east_corner,
+                        south_east_corner, south_west_corner,
+                        destination_size=(512, 512)):
+    corners = np.array([north_west_corner, north_east_corner, south_east_corner, south_west_corner], dtype=np.float32)
+    warped_corners = np.array([[0, 0], [destination_size[0] - 1, 0], [destination_size[0] - 1, destination_size[1] - 1], [0, destination_size[1] - 1]], dtype=np.float32)
+    perspective_mtx = cv2.getPerspectiveTransform(corners, warped_corners)
+    # Warp the image
+    corrected_img = cv2.warpPerspective(original_img, perspective_mtx, dsize=destination_size)
+    return corrected_img
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
