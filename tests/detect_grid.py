@@ -94,6 +94,25 @@ def main(
     DrawLine(hough_lines_img, east_line, (0, 255, 255))
     cv2.imwrite(os.path.join(outputDirectory, "main_houghLines.png"), hough_lines_img)
 
+    # Compute corners
+    north_west_corner = Intersection(west_line, north_line)
+    north_east_corner = Intersection(north_line, east_line)
+    south_east_corner = Intersection(east_line, south_line)
+    south_west_corner = Intersection(south_line, west_line)
+    corners_img = copy.deepcopy(original_img)
+    cv2.line(corners_img, (round(north_west_corner[0]), round(north_west_corner[1])), (round(north_east_corner[0]), round(north_east_corner[1])),
+             (255, 0, 0))
+    cv2.line(corners_img, (round(south_east_corner[0]), round(south_east_corner[1])),
+             (round(north_east_corner[0]), round(north_east_corner[1])), (255, 0, 0))
+    cv2.line(corners_img, (round(south_east_corner[0]), round(south_east_corner[1])),
+             (round(south_west_corner[0]), round(south_west_corner[1])), (255, 0, 0))
+    cv2.line(corners_img, (round(north_west_corner[0]), round(north_west_corner[1])),
+             (round(south_west_corner[0]), round(south_west_corner[1])), (255, 0, 0))
+    cv2.imwrite(os.path.join(outputDirectory, "main_corners.png"), corners_img)
+    
+    # Perspective correction
+
+
 def DrawLine(image, rho_theta, color):
     rho = rho_theta[0]
     theta = rho_theta[1]
@@ -163,6 +182,33 @@ def BoundaryVerticalLines(vertical_lines):
     east_theta = statistics.median(east_thetas)
     east_rho = statistics.median(east_rhos)
     return (west_rho, west_theta), (east_rho, east_theta)
+
+def Intersection(line1, line2):
+    # intersection_x = rho1 * cos(theta1) + alpha * sin(theta1) = rho2 * cos(theta2) + beta * sin(theta2)
+    # intersection_y = rho1 * sin(theta1) - alpha * cos(theta1) = rho2 * sin(theta2) - beta * cos(theta2)
+    #print(f"Intersection(): line1 = {line1}; line2 = {line2}")
+    rho1cos1 = line1[0] * math.cos(line1[1])
+    sin1 = math.sin(line1[1])
+    rho1sin1 = line1[0] * math.sin(line1[1])
+    cos1 = math.cos(line1[1])
+    rho2cos2 = line2[0] * math.cos(line2[1])
+    sin2 = math.sin(line2[1])
+    rho2sin2 = line2[0] * math.sin(line2[1])
+    cos2 = math.cos(line2[1])
+    A = np.zeros((2, 2), dtype=float)
+    b = np.zeros((2), dtype=float)
+    A[0, 0] = sin1
+    A[0, 1] = -sin2
+    A[1, 0] = -cos1
+    A[1, 1] = cos2
+    b[0] = rho2cos2 - rho1cos1
+    b[1] = rho2sin2 - rho1sin1
+    alpha_beta = np.linalg.solve(A, b)
+    #print(f"Intersection(): alpha_beta = {alpha_beta}")
+    x = rho1cos1 + alpha_beta[0] * sin1
+    y = rho1sin1 - alpha_beta[0] * cos1
+    #print(f"Intersection(): (x, y) = ({x}, {y})")
+    return (x, y)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
